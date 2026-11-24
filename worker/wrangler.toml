@@ -1,0 +1,7 @@
+name = "ip-status-board"
+main = "src/index.js"
+compatibility_date = "2024-01-01"
+
+[[kv_namespaces]]
+binding = "IP_STORE"
+id = "c1ba15b39f1f43b4870813c2547d19b3"
