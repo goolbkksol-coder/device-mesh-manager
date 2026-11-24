@@ -1,8 +1,12 @@
 ﻿# ตรวจสอบสิทธิ์ Administrator
-$isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsPrincipal]::Administrator)
+$identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+$principal = New-Object Security.Principal.WindowsPrincipal($identity)
+$isAdmin = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+
 if (-not $isAdmin) {
-    Write-Error "กรุณาเปิด PowerShell ด้วยสิทธิ์ Run as Administrator เพื่อติดตั้ง Service"
-    exit 1
+    Write-Host "กำลังขอสิทธิ์ Administrator (UAC)..." -ForegroundColor Yellow
+    Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs
+    exit 0
 }
 
 $TaskName = "WslPortMeshAgent"
@@ -30,3 +34,4 @@ Start-ScheduledTask -TaskName $TaskName
 
 Write-Host "✅ ติดตั้งและเริ่มทำงาน Service เรียบร้อยแล้ว!" -ForegroundColor Green
 Write-Host "Service จะเริ่มทำงานอัตโนมัติทุกครั้งที่เปิดเครื่อง Windows" -ForegroundColor Gray
+

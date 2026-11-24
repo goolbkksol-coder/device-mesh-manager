@@ -1,7 +1,11 @@
-﻿$isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsPrincipal]::Administrator)
+﻿$identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+$principal = New-Object Security.Principal.WindowsPrincipal($identity)
+$isAdmin = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+
 if (-not $isAdmin) {
-    Write-Error "กรุณาเปิด PowerShell ด้วยสิทธิ์ Run as Administrator เพื่อถอนการติดตั้ง"
-    exit 1
+    Write-Host "กำลังขอสิทธิ์ Administrator (UAC)..." -ForegroundColor Yellow
+    Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs
+    exit 0
 }
 
 $TaskName = "WslPortMeshAgent"
