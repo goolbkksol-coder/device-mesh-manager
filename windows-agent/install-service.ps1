@@ -12,19 +12,24 @@ if (-not $isAdmin) {
 $TaskName = "WslPortMeshAgent"
 $ScriptPath = Join-Path $PSScriptRoot "agent.ps1"
 
-Write-Host "กำลังติดตั้ง Windows Scheduled Task '$TaskName'..." -ForegroundColor Cyan
+Write-Host "กำลังอัปเดตและติดตั้ง Windows Scheduled Task '$TaskName'..." -ForegroundColor Cyan
+
+# หยุดและลบ Task เก่าออกก่อน
+Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue 2>$null
+Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue 2>$null
 
 # Action: รัน PowerShell แบบ Hidden
 $Action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$ScriptPath`""
 
-# Trigger: รันตอนเปิดเครื่อง Windows (At Startup)
-$Trigger = New-ScheduledTaskTrigger -AtStartup
+# Trigger: รันตอนผู้ใช้ล็อกอิน (At Logon)
+$Trigger = New-ScheduledTaskTrigger -AtLogOn
 
 # Settings: ให้รันตลอดเวลา ไม่จำกัดเวลา timeout
 $Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit 0
 
-# Principal: รันด้วยสิทธิ์ SYSTEM สูงสุด เพื่อให้สามารถจัดการ netsh และ firewall ได้
-$Principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+# Principal: รันด้วยสิทธิ์ Highest ของผู้ใช้ปัจจุบัน เพื่อให้เข้าถึง WSL2 และคำสั่ง netsh/firewall ได้พร้อมกัน
+$currentUser = "$env:USERDOMAIN\$env:USERNAME"
+$Principal = New-ScheduledTaskPrincipal -UserId $currentUser -LogonType Interactive -RunLevel Highest
 
 # ลงทะเบียน Task
 Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $Trigger -Settings $Settings -Principal $Principal -Force | Out-Null
@@ -33,5 +38,4 @@ Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $Trigger -Se
 Start-ScheduledTask -TaskName $TaskName
 
 Write-Host "✅ ติดตั้งและเริ่มทำงาน Service เรียบร้อยแล้ว!" -ForegroundColor Green
-Write-Host "Service จะเริ่มทำงานอัตโนมัติทุกครั้งที่เปิดเครื่อง Windows" -ForegroundColor Gray
-
+Write-Host "Task กำลังทำงานภายใต้ผู้ใช้ $currentUser ด้วยสิทธิ์สูงสุด (Highest Privileges)" -ForegroundColor Gray

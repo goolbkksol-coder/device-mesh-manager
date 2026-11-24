@@ -10,22 +10,20 @@ export default {
       const data = await request.json().catch(() => ({}));
       const device = String(data.device || "windows-host").replace(/[^a-zA-Z0-9_-]/g, "");
 
-      // ดึงคำสั่งที่ค้างอยู่ (Pending Commands) ถ้ามี
       let pendingCmd = null;
       if (env.IP_STORE) {
         const cmdRaw = await env.IP_STORE.get(`cmd:${device}`);
         pendingCmd = cmdRaw ? JSON.parse(cmdRaw) : null;
         if (pendingCmd) {
-          // ลบคำสั่งเมื่อส่งให้ Agent รับไปทำแล้ว
           await env.IP_STORE.delete(`cmd:${device}`);
         }
 
-        // บันทึกสถานะเครื่องล่าสุด
         const payload = {
           device,
           publicIp: data.publicIp || request.headers.get("CF-Connecting-IP") || "-",
           lanIp: data.lanIp || "-",
           wslIp: data.wslIp || "-",
+          tailscaleIp: data.tailscaleIp || "-",
           activePorts: Array.isArray(data.activePorts) ? data.activePorts : [],
           updatedAt: new Date().toLocaleString("th-TH", { timeZone: "Asia/Bangkok" })
         };
@@ -41,7 +39,7 @@ export default {
       if (key !== env.VIEW_KEY) return new Response("Unauthorized", { status: 401 });
 
       const body = await request.json().catch(() => ({}));
-      const { device, action, port } = body; // action: "OPEN" | "CLOSE"
+      const { device, action, port } = body;
       
       if (!device || !action || !port) {
         return Response.json({ ok: false, error: "ข้อมูลไม่ครบถ้วน" }, { status: 400 });
@@ -120,7 +118,7 @@ function dashboardPage(devices, viewKey) {
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Device & Port Manager</title>
   <style>
-    body { font-family: system-ui, -apple-system, sans-serif; max-width: 900px; margin: 30px auto; padding: 0 16px; background: #0f172a; color: #f8fafc; }
+    body { font-family: system-ui, -apple-system, sans-serif; max-width: 920px; margin: 30px auto; padding: 0 16px; background: #0f172a; color: #f8fafc; }
     .card { background: #1e293b; border-radius: 12px; padding: 24px; margin-bottom: 24px; border: 1px solid #334155; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.2); }
     table { width: 100%; border-collapse: collapse; margin-top: 14px; }
     th, td { padding: 12px 14px; text-align: left; border-bottom: 1px solid #334155; font-size: 14px; }
@@ -133,6 +131,8 @@ function dashboardPage(devices, viewKey) {
     .btn-red:hover { background: #b91c1c; }
     input { background: #0f172a; border: 1px solid #334155; color: #fff; padding: 8px 12px; border-radius: 6px; font-size: 14px; }
     .status-badge { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: 9999px; font-size: 12px; background: rgba(34,197,94,0.15); color: #4ade80; }
+    .ip-box { background: #0f172a; padding: 12px; border-radius: 8px; border: 1px solid #334155; }
+    .ip-box small { color: #94a3b8; display: block; margin-bottom: 4px; font-size: 12px; }
   </style>
 </head>
 <body>
@@ -153,10 +153,23 @@ function dashboardPage(devices, viewKey) {
         <span style="font-size:12px; color:#94a3b8;">อัปเดตล่าสุด: ${escapeHtml(d.updatedAt)}</span>
       </div>
 
-      <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin: 18px 0; background: #0f172a; padding: 14px; border-radius: 8px;">
-        <div><small style="color:#94a3b8;">Public IP</small><br><code>${escapeHtml(d.publicIp)}</code></div>
-        <div><small style="color:#94a3b8;">LAN IP (Windows)</small><br><code>${escapeHtml(d.lanIp)}</code></div>
-        <div><small style="color:#94a3b8;">WSL2 IP</small><br><code>${escapeHtml(d.wslIp)}</code></div>
+      <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin: 18px 0;">
+        <div class="ip-box">
+          <small>🌐 Public IP (WAN)</small>
+          <code>${escapeHtml(d.publicIp || "-")}</code>
+        </div>
+        <div class="ip-box">
+          <small>🏠 LAN IP (Windows)</small>
+          <code>${escapeHtml(d.lanIp || "-")}</code>
+        </div>
+        <div class="ip-box">
+          <small>🛡️ Tailscale IP</small>
+          <code style="color: #4ade80;">${escapeHtml(d.tailscaleIp || "-")}</code>
+        </div>
+        <div class="ip-box">
+          <small>🐧 WSL2 IP</small>
+          <code>${escapeHtml(d.wslIp || "-")}</code>
+        </div>
       </div>
 
       <h4 style="margin: 16px 0 8px 0;">🔌 รายการ Port ที่ Forward สู่ WSL2:</h4>
@@ -173,7 +186,7 @@ function dashboardPage(devices, viewKey) {
           ${(d.activePorts || []).map(p => `
             <tr>
               <td><b>${p}</b></td>
-              <td><code>${escapeHtml(d.wslIp)}:${p}</code></td>
+              <td><code>${escapeHtml(d.wslIp || "127.0.0.1")}:${p}</code></td>
               <td><span style="color:#4ade80;">● กำลังเปิด</span></td>
               <td>
                 <button class="btn btn-red" onclick="sendAction('${escapeHtml(d.device)}', 'CLOSE', ${p})">ปิด Port</button>
